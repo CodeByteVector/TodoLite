@@ -1,0 +1,58 @@
+import {
+  Inbox,
+  Briefcase,
+  User,
+  Star,
+  Heart,
+  BookOpen,
+  ShoppingCart,
+  Plane,
+  Dumbbell,
+  Zap,
+  Sparkles,
+  Code,
+  GraduationCap,
+  Gamepad2,
+  Music,
+  Palette,
+  Coffee,
+  Lightbulb,
+  List,
+  Rocket,
+  Wallet,
+  Stethoscope,
+  PawPrint,
+  Flag,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
+export const iconMap: Record<string, LucideIcon> = {
+  inbox: Inbox,
+  briefcase: Briefcase,
+  user: User,
+  star: Star,
+  heart: Heart,
+  book: BookOpen,
+  "shopping-cart": ShoppingCart,
+  plane: Plane,
+  dumbbell: Dumbbell,
+  home: Zap,
+  sprout: Sparkles,
+  code: Code,
+  "graduation-cap": GraduationCap,
+  gamepad: Gamepad2,
+  music: Music,
+  palette: Palette,
+  coffee: Coffee,
+  idea: Lightbulb,
+  list: List,
+  rocket: Rocket,
+  wallet: Wallet,
+  health: Stethoscope,
+  pet: PawPrint,
+  flag: Flag,
+};
+
+export function iconComponent(name: string): LucideIcon {
+  return iconMap[name] || List;
+}

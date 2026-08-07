@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+
+:root {
+  --accent: #0a84ff;
+  --canvas: #f2f2f7;
+  --section: #ffffff;
+  --section-alt: #f2f2f7;
+  --separator: rgba(60, 60, 67, 0.1);
+  --text: #1c1c1e;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #98989d;
+  --warning: #ff9f0a;
+  --danger: #ff3b30;
+  --teal: #64d2ff;
+}
+
+.dark {
+  --canvas: #000000;
+  --section: #1c1c1e;
+  --section-alt: #2c2c2e;
+  --separator: rgba(84, 84, 88, 0.6);
+  --text: #ffffff;
+  --text-secondary: #98989d;
+  --text-tertiary: #6e6e73;
+  --warning: #ffd60a;
+  --danger: #ff453a;
+  --teal: #55c2f0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--canvas);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+input,
+textarea {
+  user-select: text;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--text-tertiary);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+
+.card {
+  background: var(--section);
+  border-radius: 1.25rem;
+}
+
+.section-blur {
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.accent-soft {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.accent-fill {
+  background: var(--accent);
+  color: white;
+}

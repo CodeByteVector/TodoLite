@@ -1,0 +1,79 @@
+<div align="center">
+
+# TodoLite
+
+A beautiful, secure, **100 % local-first** To-Do planner for Windows — iOS-inspired in look and feel.
+
+![Windows](https://img.shields.io/badge/Windows-10%2F11%20x64-0078D6?style=flat-square&logo=windows&logoColor=white)
+![Built with](https://img.shields.io/badge/Built%20with-TypeScript%20%2B%20Rust-5E5CE6?style=flat-square)
+![License: MIT](https://img.shields.io/badge/License-MIT-30D158?style=flat-square)
+
+Built with **Tauri 2** · **React 19** · **TypeScript** · **Vite** · **Tailwind CSS v4**
+
+</div>
+
+---
+
+## Features
+
+- **Lists & tasks** — organise work into colored lists; break big tasks into chunks with subtasks
+- **Due dates & times** — an iOS-style calendar picker plus quick picks (Today / Tomorrow)
+- **Reminders** — native Windows notifications, from 5 minutes to 1 day before the due time
+- **Repeat** — daily, weekly, monthly, yearly recurrence
+- **Tags** — colour-coded, assignable per task
+- **Priorities** — none / low / medium / high with visual coding
+- **Smart views** — Today, Next 7 Days, Overdue, All Tasks
+- **Drag & drop** — reorder open tasks and create lists on the fly
+- **Search** — live filtering across everything
+- **Statistics** — completion rings, streaks, last-14-days chart, per-list progress
+- **Dark / light mode** and 9 accent colors
+- **Quick lock** — optional launch PIN
+
+## Security
+
+- Everything lives on **your PC**. No accounts, no cloud, no telemetry.
+- Data is stored in a local SQLite database, **encrypted at rest with Windows DPAPI**, scoped to your Windows account.
+- The app makes no network calls — it cannot phone home.
+- An optional **launch PIN** adds a second layer of protection.
+
+## Download
+
+Get the installer from the [**Releases**](../../releases) page:
+
+| File | Description |
+|---|---|
+| `TodoLite_x.x.x_x64-setup.exe` | NSIS installer — per-user install, no admin rights needed |
+| `TodoLite_x.x.x_x64_en-US.msi` | MSI package |
+
+**Requirements:** Windows 10/11 x64 and the [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (preinstalled on Windows 11).
+
+## Development
+
+```bash
+# prerequisites: Node.js 18+, Rust (MSVC toolchain)
+npm install
+npm run tauri dev     # run in development mode
+npm run tauri build   # produce release installers in src-tauri/target/release/bundle
+```
+
+### Project layout
+
+```
+src/                 React frontend (Vite + TypeScript)
+  components/           UI building blocks (titlebar, sidebar, sheets, task rows…)
+  lib/                  api wrapper, theme, formatting, icons
+  store.ts              Zustand store (state + data refresh)
+src-tauri/           Rust backend
+  src/database.rs       SQLite schema + CRUD
+  src/crypto.rs         DPAPI encryption at rest
+  src/reminders.rs      Windows notification scheduler
+  src/lib.rs            Tauri command layer + background loops
+```
+
+## How storage security works
+
+The app writes to a working SQLite file while running and continuously maintains an **encrypted snapshot** (`todolite.db.enc`) in your `AppData` folder. The snapshot is encrypted with `CryptProtectData` (Windows DPAPI), so only your Windows user account can decrypt it. The plaintext database is removed on exit.
+
+## License
+
+Distributed under the [MIT License](LICENSE). Copyright © 2026 **CodeByteVector**.
