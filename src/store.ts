@@ -22,7 +22,6 @@ interface StoreState {
   refreshSettings: () => Promise<void>;
 
   hideData: () => void;
-  showData: () => Promise<void>;
 
   setView: (v: ViewState) => void;
   setSearch: (s: string) => void;
@@ -137,16 +136,6 @@ export const useStore = create<StoreState>((set, get) => ({
       selectedTask: null,
       search: "",
     });
-  },
-
-  showData: async () => {
-    set({ dataVisible: true });
-    await Promise.all([
-      get().refreshLists(),
-      get().refreshTags(),
-      get().refreshStats(),
-      get().refreshTasks(),
-    ]);
   },
 
   setView: (v) => {

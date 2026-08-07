@@ -32,6 +32,16 @@ import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notif
 
 initTheme();
 
+async function requestNotifPermissionIfEnabled() {
+  const settings = useStore.getState().settings;
+  if (settings["notifications"] !== "false") {
+    const granted = await isPermissionGranted().catch(() => false);
+    if (!granted) {
+      await requestPermission().catch(() => {});
+    }
+  }
+}
+
 async function duplicateTask(t: Task) {
   const created = await api.createTask({
     listId: t.listId,
@@ -56,36 +66,24 @@ async function duplicateTask(t: Task) {
 }
 
 export default function App() {
-  const ready = useStore((s) => s.ready);
   const bootstrap = useStore((s) => s.bootstrap);
   const selectedTask = useStore((s) => s.selectedTask);
   const openTask = useStore((s) => s.openTask);
   const viewKind = useStore((s) => s.view.kind);
   const viewListId = useStore((s) => s.view.listId);
-  const [pinHash, setPinHash] = useState("");
-  const [checkedPin, setCheckedPin] = useState(false);
-  const [unlocked, setUnlocked] = useState(false);
+  const [appLocked, setAppLocked] = useState<boolean | null>(null);
   const [splash, setSplash] = useState(true);
 
   useEffect(() => {
-    void bootstrap();
-  }, [bootstrap]);
-
-  useEffect(() => {
     (async () => {
-      const hash = await api.getSetting("pin_hash").catch(() => null);
-      setPinHash(hash || "");
-      setCheckedPin(true);
-      if (!hash) setUnlocked(true);
-      const settings = useStore.getState().settings;
-      if (settings["notifications"] !== "false") {
-        const granted = await isPermissionGranted().catch(() => false);
-        if (!granted) {
-          await requestPermission().catch(() => {});
-        }
+      const status = await api.getStatus().catch(() => ({ locked: false, pinConfigured: false }));
+      if (!status.locked) {
+        await bootstrap();
+        await requestNotifPermissionIfEnabled();
       }
+      setAppLocked(status.locked);
     })();
-  }, []);
+  }, [bootstrap]);
 
   function renderView() {
     switch (viewKind) {
@@ -218,16 +216,22 @@ export default function App() {
 
       {splash && <SplashScreen onDone={() => setSplash(false)} />}
 
-      {ready && checkedPin && pinHash && !unlocked && (
+      {appLocked === true && (
         <LockScreen
-          hash={pinHash}
-          onUnlock={() => {
-            void useStore.getState().showData();
-            setUnlocked(true);
+          onUnlock={async (pin) => {
+            try {
+              await api.unlock(pin);
+              setAppLocked(false);
+              await useStore.getState().bootstrap();
+              await requestNotifPermissionIfEnabled();
+              return true;
+            } catch {
+              return false;
+            }
           }}
           onSkip={() => {
             useStore.getState().hideData();
-            setUnlocked(true);
+            setAppLocked(false);
           }}
         />
       )}

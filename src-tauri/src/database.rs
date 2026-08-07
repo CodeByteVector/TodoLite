@@ -9,72 +9,200 @@ use crate::crypto;
 
 // --------------------------------------------------------- core
 
+const DB_FILE: &str = "todolite.db";
+const PIN_FILE: &str = "master.pin";
+const DPAPI_FILE: &str = "master.dpapi";
+const MASTER_KEY_LEN: usize = crypto::MASTER_KEY_LEN;
+
 pub struct AppDb {
     pub dir: PathBuf,
-    pub conn: Mutex<Option<Connection>>,
+    conn: Mutex<Option<Connection>>,
+    key: Mutex<Option<[u8; MASTER_KEY_LEN]>>,
 }
 
+/// Initialise the database and keyring.
+///
+/// * First run: a random master key is generated and wrapped with Windows DPAPI.
+/// * PIN configured: the database stays sealed until `unlock` succeeds.
+/// * Otherwise the key is unwrapped from DPAPI and the database is opened.
 pub fn init_db(dir: PathBuf) -> Result<AppDb, String> {
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
-    let enc = dir.join("todolite.db.enc");
-    let plain = dir.join("todolite.db");
+    let db = AppDb {
+        dir,
+        conn: Mutex::new(None),
+        key: Mutex::new(None),
+    };
 
-    // Prefer the encrypted, at-rest snapshot.
-    if enc.exists() && !plain.exists() {
-        decrypt_to_plain(&enc, &plain)?;
+    if db.has_pin() {
+        return Ok(db);
     }
 
-    let conn = open_connection(&plain).map_err(|e| e.to_string())?;
-    migrate(&conn).map_err(|e| e.to_string())?;
+    let master: [u8; MASTER_KEY_LEN] = {
+        let dpapi_path = db.dir.join(DPAPI_FILE);
+        if dpapi_path.exists() {
+            let blob = std::fs::read(&dpapi_path).map_err(|e| e.to_string())?;
+            crypto::dpapi_decrypt(&blob)?
+                .try_into()
+                .map_err(|_| "stored master key has an unexpected size".to_string())?
+        } else {
+            let key = crypto::generate_master_key();
+            let blob = crypto::dpapi_encrypt(&key)?;
+            crypto::write_atomic(&dpapi_path, &blob).map_err(|e| e.to_string())?;
+            key
+        }
+    };
 
-    Ok(AppDb { dir, conn: Mutex::new(Some(conn)) })
+    *db.key.lock().unwrap() = Some(master);
+    db.open()?;
+    Ok(db)
 }
 
 impl AppDb {
-    /// Returns a locked connection, reopening (and decrypting) it if needed.
-    pub fn conn(&self) -> Result<std::sync::MutexGuard<'_, Option<Connection>>, String> {
-        let mut guard = self.conn.lock().map_err(|e| e.to_string())?;
-        if guard.is_none() {
-            let plain = self.dir.join("todolite.db");
-            let enc = self.dir.join("todolite.db.enc");
-            if !plain.exists() && enc.exists() {
-                decrypt_to_plain(&enc, &plain)?;
-            }
-let c = open_connection(&plain).map_err(|e| e.to_string())?;
-            migrate(&c).map_err(|e| e.to_string())?;
-            *guard = Some(c);
-        }
-        Ok(guard)
+    pub fn db_path(&self) -> PathBuf {
+        self.dir.join(DB_FILE)
     }
 
-    /// Encrypt the committed database into the at-rest snapshot,
-    /// delete the plaintext file and close the connection.
-    pub fn persist(&self) -> Result<(), String> {
-        let mut guard = self.conn.lock().map_err(|e| e.to_string())?;
-        let conn = guard
-            .as_ref()
-            .ok_or_else(|| "no open connection to persist".to_string())?;
-        let plain = self.dir.join("todolite.db");
-        let enc = self.dir.join("todolite.db.enc");
+    pub fn has_pin(&self) -> bool {
+        self.dir.join(PIN_FILE).exists()
+    }
 
-        let data = std::fs::read(&plain).map_err(|e| e.to_string())?;
-        let encrypted = crypto::dpapi_encrypt(&data)?;
-        crypto::write_atomic(&enc, &encrypted).map_err(|e| e.to_string())?;
-        let _ = std::fs::remove_file(&plain);
-        let _ = conn;
-        *guard = None;
+    /// True when a PIN is configured and the database is not yet unlocked.
+    pub fn locked(&self) -> bool {
+        self.has_pin() && self.key.lock().map(|k| k.is_none()).unwrap_or(true)
+    }
+
+    /// Open (or reopen) the encrypted connection if a master key is available.
+    pub fn open(&self) -> Result<(), String> {
+        let mut guard = self.conn.lock().map_err(|e| e.to_string())?;
+        if guard.is_some() {
+            return Ok(());
+        }
+        let key = self
+            .key
+            .lock()
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "database is locked".to_string())?;
+        let conn = open_sqlite(&self.db_path(), &key).map_err(|e| e.to_string())?;
+        migrate(&conn).map_err(|e| e.to_string())?;
+        *guard = Some(conn);
         Ok(())
+    }
+
+    /// Returns a locked connection, reopening the encrypted database if needed.
+    pub fn conn(&self) -> Result<std::sync::MutexGuard<'_, Option<Connection>>, String> {
+        self.open()?;
+        self.conn.lock().map_err(|e| e.to_string())
+    }
+
+    /// Durability safety barrier. Data is written encrypted and committed by
+    /// every command, so no snapshot is required; this only flushes the journal.
+    pub fn persist(&self) -> Result<(), String> {
+        let guard = self.conn.lock().map_err(|e| e.to_string())?;
+        if let Some(c) = guard.as_ref() {
+            let _ = c.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+        }
+        Ok(())
+    }
+
+    /// Unseal the master key with the PIN and open the database.
+    pub fn unlock(&self, pin: &str) -> Result<(), String> {
+        if !self.locked() {
+            return Ok(());
+        }
+        let master = self.unseal_key_with_pin(pin)?;
+        *self.key.lock().unwrap() = Some(master);
+        self.open()
+    }
+
+    /// Lock the app: close the connection and wipe the master key from memory.
+    /// Only meaningful when a PIN is configured.
+    pub fn lock(&self) {
+        if !self.has_pin() {
+            return;
+        }
+        *self.conn.lock().unwrap() = None;
+        let mut key = self.key.lock().unwrap();
+        if let Some(mut k) = key.take() {
+            crypto::wipe(&mut k);
+        }
+    }
+
+    /// Set or change the PIN: the master key is re-sealed under the new PIN.
+    /// When a PIN is already active, `current` must be correct.
+    pub fn set_pin(&self, current: Option<&str>, new_pin: &str) -> Result<(), String> {
+        let master: [u8; MASTER_KEY_LEN] = {
+            let guard = self.key.lock().unwrap();
+            match *guard {
+                Some(m) => m,
+                None => self.unseal_key_with_pin(
+                    current.ok_or_else(|| "current PIN required".to_string())?,
+                )?,
+            }
+        };
+        let salt = crypto::random_bytes(crypto::SALT_LEN);
+        let pin_key = crypto::derive_pin_key(new_pin, &salt)?;
+        let (nonce, ciphertext) = crypto::aes_gcm_encrypt(&pin_key, &master)?;
+
+        let mut out = Vec::with_capacity(crypto::SALT_LEN + nonce.len() + ciphertext.len());
+        out.extend_from_slice(&salt);
+        out.extend_from_slice(&nonce);
+        out.extend_from_slice(&ciphertext);
+        crypto::write_atomic(&self.dir.join(PIN_FILE), &out).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(self.dir.join(DPAPI_FILE));
+
+        if self.key.lock().unwrap().is_none() {
+            *self.key.lock().unwrap() = Some(master);
+        }
+        Ok(())
+    }
+
+    /// Remove the PIN: the master key is re-wrapped with DPAPI after verifying
+    /// the current PIN.
+    pub fn remove_pin(&self, current: &str) -> Result<(), String> {
+        let master = self.unseal_key_with_pin(current)?;
+        let blob = crypto::dpapi_encrypt(&master)?;
+        crypto::write_atomic(&self.dir.join(DPAPI_FILE), &blob).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(self.dir.join(PIN_FILE));
+        if self.key.lock().unwrap().is_none() {
+            *self.key.lock().unwrap() = Some(master);
+        }
+        Ok(())
+    }
+
+    fn unseal_key_with_pin(&self, pin: &str) -> Result<[u8; MASTER_KEY_LEN], String> {
+        let path = self.dir.join(PIN_FILE);
+        let data = std::fs::read(&path).map_err(|e| e.to_string())?;
+        if data.len() < crypto::SALT_LEN + crypto::NONCE_LEN {
+            return Err("PIN file is corrupt".to_string());
+        }
+        let (salt, rest) = data.split_at(crypto::SALT_LEN);
+        let (nonce, ciphertext) = rest.split_at(crypto::NONCE_LEN);
+        let pin_key = crypto::derive_pin_key(pin, salt)?;
+        let plain = crypto::aes_gcm_decrypt(&pin_key, nonce, ciphertext)
+            .map_err(|_| "Incorrect PIN".to_string())?;
+        plain
+            .try_into()
+            .map_err(|_| "stored master key has an unexpected size".to_string())
     }
 }
 
-fn open_connection(path: &std::path::Path) -> rusqlite::Result<Connection> {
+/// Open the database with SQLCipher AES-256 encryption using the master key.
+/// Every byte on disk (data, journal, temp) is encrypted - there is no
+/// plaintext phase.
+fn open_sqlite(path: &std::path::Path, key: &[u8; MASTER_KEY_LEN]) -> rusqlite::Result<Connection> {
     let conn = Connection::open(path)?;
-    conn.execute_batch(
-        "PRAGMA journal_mode=DELETE;
-         PRAGMA synchronous=NORMAL;
-         PRAGMA foreign_keys=ON;",
-    )?;
+    let hex: String = key.iter().map(|b| format!("{:02x}", b)).collect();
+    conn.execute_batch(&format!(
+        "PRAGMA key = \"x'{hex}'\";
+         PRAGMA secure_delete = ON;
+         PRAGMA journal_mode = DELETE;
+         PRAGMA synchronous = NORMAL;
+         PRAGMA foreign_keys = ON;"
+    ))?;
+    // Force a read to verify the key is correct before use.
+    conn.query_row("SELECT count(*) FROM sqlite_master", [], |r| r.get::<_, i64>(0))
+        .map_err(|e| e)?;
     rusqlite::vtab::array::load_module(&conn)?;
     Ok(conn)
 }
@@ -140,13 +268,6 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         "#,
     )
     
-}
-
-fn decrypt_to_plain(enc: &std::path::Path, plain: &std::path::Path) -> Result<(), String> {
-    let blob = std::fs::read(enc).map_err(|e| e.to_string())?;
-    let data = crypto::dpapi_decrypt(&blob)?;
-    std::fs::write(plain, data).map_err(|e| e.to_string())?;
-    Ok(())
 }
 
 // ---------------------------------------------------------- dates
@@ -893,5 +1014,96 @@ fn compute_streaks(conn: &Connection, t: &str) -> rusqlite::Result<(i64, i64)> {
         }
     }
     Ok((cur, best))
+}
+
+// ---------------------------------------------------------------- tests
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn fresh_start_creates_encrypted_db_and_crud_works() {
+        let dir = tempdir().unwrap();
+        let db = init_db(dir.path().to_path_buf()).unwrap();
+        assert!(!db.has_pin());
+        assert!(!db.locked());
+
+        let conn = db.conn().unwrap();
+        let c = conn.as_ref().unwrap();
+        let lists = create_list(c, "Test", "inbox", "#0A84FF").unwrap();
+        assert_eq!(lists.len(), 1);
+
+        let t = create_task(c, Some(lists[0].id), "Buy milk", "", 0, None, None, None, "").unwrap();
+        assert_eq!(t.title, "Buy milk");
+        assert_eq!(list_tasks(c, "", Some(lists[0].id), "").unwrap().len(), 1);
+
+        // The on-disk database must NOT be plaintext SQLite.
+        let bytes = std::fs::read(db.db_path()).unwrap();
+        assert!(
+            !bytes.starts_with(b"SQLite format 3\x00"),
+            "database file must be encrypted at rest"
+        );
+    }
+
+    #[test]
+    fn pin_seals_key_and_locks_database() {
+        let dir = tempdir().unwrap();
+        let db = init_db(dir.path().to_path_buf()).unwrap();
+        db.set_pin(None, "1234").unwrap();
+        assert!(db.has_pin());
+
+        // The PIN file stores salt+nonce+ciphertext, never the raw key.
+        let pin_bytes = std::fs::read(dir.path().join(PIN_FILE)).unwrap();
+        assert_eq!(pin_bytes.len(), crypto::SALT_LEN + crypto::NONCE_LEN + 32 + 16);
+        assert!(!db.dir.join(DPAPI_FILE).exists(), "DPAPI wrapper must be removed when PIN is active");
+
+        // Lock: connection closes, key is wiped from memory.
+        db.lock();
+        assert!(db.locked());
+        assert!(db.conn().is_err(), "commands must fail while locked");
+
+        // Wrong PIN must not unlock.
+        assert!(db.unlock("0000").is_err());
+        assert!(db.locked());
+
+        // Correct PIN unlocks and the database works.
+        db.unlock("1234").unwrap();
+        assert!(!db.locked());
+        let conn = db.conn().unwrap();
+        create_list(conn.as_ref().unwrap(), "Sealed", "lock", "#0A84FF").unwrap();
+    }
+
+    #[test]
+    fn remove_pin_requires_current_pin_and_restores_dpapi() {
+        let dir = tempdir().unwrap();
+        let db = init_db(dir.path().to_path_buf()).unwrap();
+        db.set_pin(None, "9876").unwrap();
+        db.lock();
+
+        assert!(db.remove_pin("0000").is_err(), "removing with a wrong PIN must fail");
+        db.remove_pin("9876").unwrap();
+        assert!(!db.has_pin());
+        assert!(db.dir.join(DPAPI_FILE).exists());
+
+        // Simulate a restart: a fresh instance opens straight away, no PIN.
+        let db2 = init_db(dir.path().to_path_buf()).unwrap();
+        assert!(!db2.locked());
+        assert!(db2.conn().is_ok());
+    }
+
+    #[test]
+    fn change_pin_requires_current_pin() {
+        let dir = tempdir().unwrap();
+        let db = init_db(dir.path().to_path_buf()).unwrap();
+        db.set_pin(None, "1111").unwrap();
+        db.lock();
+
+        assert!(db.set_pin(Some("9999"), "2222").is_err());
+        db.set_pin(Some("1111"), "2222").unwrap();
+        db.lock();
+        assert!(db.unlock("2222").is_ok());
+    }
 }
 

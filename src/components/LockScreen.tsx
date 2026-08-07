@@ -2,30 +2,23 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { LockKeyhole } from "lucide-react";
 
-async function sha256(text: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 export function LockScreen({
-  hash,
   onUnlock,
   onSkip,
 }: {
-  hash: string;
-  onUnlock: () => void;
+  onUnlock: (pin: string) => Promise<boolean>;
   onSkip: () => void;
 }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   async function submit() {
-    const h = await sha256(code);
-    if (h === hash) {
-      onUnlock();
-    } else {
+    if (busy) return;
+    setBusy(true);
+    const ok = await onUnlock(code);
+    setBusy(false);
+    if (!ok) {
       setError(true);
       setCode("");
       setTimeout(() => setError(false), 600);
@@ -67,8 +60,9 @@ export function LockScreen({
           setCode(e.target.value.replace(/\D/g, ""));
           setError(false);
         }}
-        onKeyDown={(e) => e.key === "Enter" && code.length >= 4 && submit()}
-        className="w-56 rounded-2xl bg-[var(--section)] px-4 py-3 text-center text-[20px] font-semibold tracking-[0.4em] outline-none shadow-sm placeholder:text-[var(--text-tertiary)]"
+        onKeyDown={(e) => e.key === "Enter" && code.length >= 4 && void submit()}
+        className="w-56 rounded-2xl bg-[var(--section)] px-4 py-3 text-center text-[20px] font-semibold tracking-[0.4em] outline-none shadow-sm placeholder:text-[var(--text-tertiary)] disabled:opacity-60"
+        disabled={busy}
       />
       {error && <p className="text-[12px] text-[var(--danger)]">Incorrect PIN, try again</p>}
       <button onClick={onSkip} className="text-[12px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">

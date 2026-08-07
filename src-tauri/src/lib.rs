@@ -282,6 +282,41 @@ fn autostart_set(app: AppHandle, enabled: bool) -> Result<(), String> {
     }
 }
 
+// ------------------------------------------------------------------ security
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StatusDto {
+    locked: bool,
+    pin_configured: bool,
+}
+
+#[tauri::command]
+fn get_status(db: State<'_, AppDb>) -> Result<StatusDto, String> {
+    Ok(StatusDto { locked: db.locked(), pin_configured: db.has_pin() })
+}
+
+#[tauri::command]
+fn unlock(db: State<'_, AppDb>, pin: String) -> Result<(), String> {
+    db.unlock(&pin)
+}
+
+#[tauri::command]
+fn lock_app(db: State<'_, AppDb>) -> Result<(), String> {
+    db.lock();
+    Ok(())
+}
+
+#[tauri::command]
+fn set_pin(db: State<'_, AppDb>, current: Option<String>, new_pin: String) -> Result<(), String> {
+    db.set_pin(current.as_deref(), &new_pin)
+}
+
+#[tauri::command]
+fn remove_pin(db: State<'_, AppDb>, current: String) -> Result<(), String> {
+    db.remove_pin(&current)
+}
+
 // ------------------------------------------------------------------ persist loop
 
 fn spawn_persist_loop(app: AppHandle) {
@@ -374,6 +409,11 @@ pub fn run() {
             get_settings,
             autostart_is_enabled,
             autostart_set,
+            get_status,
+            unlock,
+            lock_app,
+            set_pin,
+            remove_pin,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

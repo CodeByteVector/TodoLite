@@ -65,4 +65,9 @@ export const api = {
 
   autostartEnabled: () => invoke<boolean>("autostart_is_enabled"),
   autostartSet: (enabled: boolean) => invoke("autostart_set", { enabled }),
+
+  getStatus: () => invoke<{ locked: boolean; pinConfigured: boolean }>("get_status"),
+  unlock: (pin: string) => invoke("unlock", { pin }),
+  setPin: (current: string | null, pin: string) => invoke("set_pin", { current, newPin: pin }),
+  removePin: (current: string) => invoke("remove_pin", { current }),
 };

@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    env:
+      OPENSSL_DIR: C:\vcpkg\installed\x64-windows-static
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OpenSSL (static) via vcpkg
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/microsoft/vcpkg C:/vcpkg
+          C:/vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          C:/vcpkg/vcpkg.exe install openssl:x64-windows-static --disable-metrics
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Typecheck & build frontend
+        run: npm run build
+
+      - name: Rust tests (SQLCipher + keyring)
+        working-directory: src-tauri
+        run: cargo test

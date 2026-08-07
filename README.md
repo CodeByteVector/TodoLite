@@ -36,9 +36,15 @@ Built with **Tauri 2** · **React 19** · **TypeScript** · **Vite** · **Tailwi
 ## Security
 
 - Everything lives on **your PC**. No accounts, no cloud, no telemetry.
-- Data is stored in a local SQLite database, **encrypted at rest with Windows DPAPI**, scoped to your Windows account.
+- The database is **fully encrypted on disk with AES-256 (SQLCipher)** — pages, journal and temp files.
+  There is **no plaintext database at any time**, not even while the app runs.
+- The database key is wrapped with **Windows DPAPI**, scoped to your Windows account. An optional
+  **launch PIN** seals the key with **scrypt + AES-256-GCM** instead, so the data cannot be unlocked
+  without your PIN — even by your own Windows session.
 - The app makes no network calls — it cannot phone home.
-- An optional **launch PIN** adds a second layer of protection.
+- Strict **Content-Security-Policy** and a locked-down Tauri capability set.
+- Weekly **security audits** (cargo audit + npm audit) run on CI, plus Dependabot and
+  private vulnerability reporting — see [SECURITY.md](SECURITY.md).
 - **Uninstall is 100% clean** — the uninstaller removes every file and the complete data folder. Nothing is left behind.
 
 ## Download
@@ -69,15 +75,25 @@ src/                 React frontend (Vite + TypeScript)
   lib/                  api wrapper, theme, formatting, icons
   store.ts              Zustand store (state + data refresh)
 src-tauri/           Rust backend
-  src/database.rs       SQLite schema + CRUD
-  src/crypto.rs         DPAPI encryption at rest
+  src/database.rs       SQLCipher-encrypted schema + CRUD + keyring lifecycle
+  src/crypto.rs         AES-256-GCM, scrypt PIN KDF, DPAPI key wrapping
   src/reminders.rs      Windows notification scheduler
   src/lib.rs            Tauri command layer + background loops
 ```
 
 ## How storage security works
 
-The app writes to a working SQLite file while running and continuously maintains an **encrypted snapshot** (`todolite.db.enc`) in your `AppData` folder. The snapshot is encrypted with `CryptProtectData` (Windows DPAPI), so only your Windows user account can decrypt it. The plaintext database is removed on exit.
+TodoLite encrypts the **entire SQLite database** with SQLCipher (AES-256): every page, the rollback
+journal and all temp data are ciphertext on disk — while the app runs and after it exits. The 256-bit
+master key is generated per installation and stored in `AppData` as:
+
+- `master.dpapi` — the key, wrapped with `CryptProtectData` (Windows DPAPI), so only your Windows
+  user account can unwrap it, **or**
+- `master.pin` — when a launch PIN is set, the key is sealed with **scrypt** (memory-hard KDF) and
+  AES-256-GCM; the DPAPI copy is deleted, so the data is unreadable without the PIN.
+
+Wrong PINs are rejected by the AEAD authentication tag — there is no client-side hash that could be
+bypassed. Locking the app closes the connection and wipes the key from memory.
 
 ## License
 
