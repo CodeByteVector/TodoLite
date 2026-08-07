@@ -30,7 +30,7 @@ windows-sys = { version = "0.61.2", features = ["Win32_Security_Cryptography", "
 chrono = { version = "0.4.45", features = ["clock"] }
 aes-gcm = "0.10.3"
 scrypt = "0.11.0"
-rand = "0.8.5"
+rand = "0.9.5"
 zeroize = "1.8.1"
 
 [dev-dependencies]
