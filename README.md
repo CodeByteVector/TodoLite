@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo.png" alt="TodoLite" width="96" height="96" />
+
 # TodoLite
 
 A beautiful, secure, **100 % local-first** To-Do planner for Windows — iOS-inspired in look and feel.
@@ -9,6 +11,8 @@ A beautiful, secure, **100 % local-first** To-Do planner for Windows — iOS-ins
 ![License: MIT](https://img.shields.io/badge/License-MIT-30D158?style=flat-square)
 
 Built with **Tauri 2** · **React 19** · **TypeScript** · **Vite** · **Tailwind CSS v4**
+
+**⬇️ Download the latest version in [Releases](../../releases)**
 
 </div>
 
@@ -35,6 +39,7 @@ Built with **Tauri 2** · **React 19** · **TypeScript** · **Vite** · **Tailwi
 - Data is stored in a local SQLite database, **encrypted at rest with Windows DPAPI**, scoped to your Windows account.
 - The app makes no network calls — it cannot phone home.
 - An optional **launch PIN** adds a second layer of protection.
+- **Uninstall is 100% clean** — the uninstaller removes every file and the complete data folder. Nothing is left behind.
 
 ## Download
 
