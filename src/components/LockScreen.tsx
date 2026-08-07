@@ -72,7 +72,7 @@ export function LockScreen({
       />
       {error && <p className="text-[12px] text-[var(--danger)]">Incorrect PIN, try again</p>}
       <button onClick={onSkip} className="text-[12px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]">
-        Skip for now
+        Skip for now · only an empty view
       </button>
     </motion.div>
   );

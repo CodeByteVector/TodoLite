@@ -9,6 +9,8 @@ import {
   Sun,
   Check,
   ChartNoAxesColumn,
+  Trash2,
+  FolderOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { useStore } from "../store";
@@ -16,6 +18,7 @@ import type { ViewState } from "../types";
 import { initTheme, getTheme, setTheme, type ThemeMode } from "../lib/theme";
 import { api } from "../lib/api";
 import { iconMap } from "../lib/icons";
+import { useMenu, type CtxItem } from "../lib/menu";
 
 function NavItem({
   active,
@@ -23,17 +26,20 @@ function NavItem({
   label,
   badge,
   onClick,
+  onContextMenu,
 }: {
   active: boolean;
   icon: React.ReactNode;
   label: string;
   badge?: number;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   return (
     <motion.button
       layout
       onClick={onClick}
+      onContextMenu={onContextMenu}
       className={`group relative flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-left transition-colors duration-150 ${
         active ? "accent-soft" : "hover:bg-[var(--separator)]"
       }`}
@@ -138,6 +144,34 @@ export function Sidebar() {
               badge={l.overdue > 0 ? l.overdue : l.open > 0 ? l.open : undefined}
               active={isActive("list", l.id)}
               onClick={() => go("list", l.id, l.name)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const items: CtxItem[] = [
+                  {
+                    label: "Open list",
+                    icon: <FolderOpen size={14} />,
+                    confirm: "",
+                    action: () => go("list", l.id, l.name),
+                  },
+                  {
+                    label: "Delete list",
+                    icon: <Trash2 size={14} />,
+                    danger: true,
+                    confirm: `Delete "${l.name}"? Tasks move to "No list".`,
+                    action: async () => {
+                      await api.deleteList(l.id);
+                      await useStore.getState().refreshLists();
+                      if (useStore.getState().view.kind === "list" && useStore.getState().view.listId === l.id) {
+                        useStore.getState().setView({ kind: "today", listId: null, title: "Today" });
+                      } else {
+                        await useStore.getState().refreshTasks();
+                      }
+                    },
+                  },
+                ];
+                useMenu.getState().openMenu(e.clientX, e.clientY, items);
+              }}
             />
           ))}
         </nav>

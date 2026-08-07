@@ -12,6 +12,19 @@ dist
 dist-ssr
 *.local
 
+# Local data & secrets — never commit
+*.db
+*.db.enc
+*.sqlite
+*.sqlite3
+*.enc
+*.env
+.env*
+*.pem
+*.key
+*.p12
+profiles/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

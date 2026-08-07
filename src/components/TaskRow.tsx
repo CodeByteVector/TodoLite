@@ -1,8 +1,10 @@
 import { motion } from "motion/react";
 import { GripVertical, Repeat } from "lucide-react";
+import { useRef } from "react";
 import type { Task } from "../types";
 import { useStore } from "../store";
 import { api } from "../lib/api";
+import { useConfetti } from "../lib/confetti";
 import { CheckCircle } from "./ui";
 import { formatDateLabel, isOverdue, todayIso } from "../lib/format";
 
@@ -19,13 +21,22 @@ export function TaskRow({
 }) {
   const openTask = useStore((s) => s.openTask);
   const refreshTasks = useStore((s) => s.refreshTasks);
+  const rowRef = useRef<HTMLDivElement>(null);
 
   const subTotal = task.subtasks.length;
   const subDone = task.subtasks.filter((s) => s.completed).length;
 
   async function toggle() {
+    const wasCompleted = task.completed;
     await api.toggleTask(task.id);
     await refreshTasks();
+    if (!wasCompleted) {
+      const rect = rowRef.current?.getBoundingClientRect();
+      useConfetti.getState().celebrate(
+        rect ? rect.left + rect.width / 2 : undefined,
+        rect ? rect.top + rect.height / 2 : undefined,
+      );
+    }
   }
 
   const overdue = isOverdue(task);
@@ -44,8 +55,16 @@ export function TaskRow({
   const canDrag = index !== undefined && !task.completed;
 
   return (
-    <motion.div layout="position" transition={{ type: "spring", stiffness: 500, damping: 40 }}>
+    <motion.div
+      layout="position"
+      data-ctx="task"
+      data-task-id={task.id}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ layout: { type: "spring", stiffness: 500, damping: 40 }, opacity: { duration: 0.25 }, y: { duration: 0.25, delay: index ? index * 0.025 : 0 } }}
+    >
       <div
+        ref={rowRef}
         draggable={canDrag}
         onDragStart={onDragStart ? (e: React.DragEvent) => onDragStart(e, task.id) : undefined}
         onDragOver={(e: React.DragEvent) => {

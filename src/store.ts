@@ -4,6 +4,7 @@ import type { Stats, Tag, Task, TaskList, ViewState } from "./types";
 
 interface StoreState {
   ready: boolean;
+  dataVisible: boolean;
   lists: TaskList[];
   tasks: Task[];
   tags: Tag[];
@@ -19,6 +20,9 @@ interface StoreState {
   refreshTasks: () => Promise<void>;
   refreshStats: () => Promise<void>;
   refreshSettings: () => Promise<void>;
+
+  hideData: () => void;
+  showData: () => Promise<void>;
 
   setView: (v: ViewState) => void;
   setSearch: (s: string) => void;
@@ -49,6 +53,7 @@ function titleFor(view: ViewState): string {
 
 export const useStore = create<StoreState>((set, get) => ({
   ready: false,
+  dataVisible: true,
   lists: [],
   tasks: [],
   tags: [],
@@ -79,16 +84,28 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   refreshLists: async () => {
+    if (!get().dataVisible) {
+      set({ lists: [] });
+      return;
+    }
     const lists = await api.getLists();
     set({ lists });
   },
 
   refreshTags: async () => {
+    if (!get().dataVisible) {
+      set({ tags: [] });
+      return;
+    }
     const tags = await api.getTags();
     set({ tags });
   },
 
   refreshTasks: async () => {
+    if (!get().dataVisible) {
+      set({ tasks: [] });
+      return;
+    }
     const { view, search } = get();
     const filter = filterFor(view);
     const listId = view.kind === "list" ? view.listId : null;
@@ -97,6 +114,10 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   refreshStats: async () => {
+    if (!get().dataVisible) {
+      set({ stats: null });
+      return;
+    }
     const stats = await api.getStats();
     set({ stats });
   },
@@ -104,6 +125,28 @@ export const useStore = create<StoreState>((set, get) => ({
   refreshSettings: async () => {
     const settings = await api.getSettings();
     set({ settings });
+  },
+
+  hideData: () => {
+    set({
+      dataVisible: false,
+      tasks: [],
+      lists: [],
+      tags: [],
+      stats: null,
+      selectedTask: null,
+      search: "",
+    });
+  },
+
+  showData: async () => {
+    set({ dataVisible: true });
+    await Promise.all([
+      get().refreshLists(),
+      get().refreshTags(),
+      get().refreshStats(),
+      get().refreshTasks(),
+    ]);
   },
 
   setView: (v) => {

@@ -169,6 +169,7 @@ fn parse_d(s: &str) -> Option<NaiveDate> {
 // ---------------------------------------------------------- DTOs
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct TagDto {
     pub id: i64,
     pub name: String,
@@ -176,6 +177,7 @@ pub struct TagDto {
 }
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct SubtaskDto {
     pub id: i64,
     pub title: String,
@@ -184,6 +186,7 @@ pub struct SubtaskDto {
 }
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct TaskDto {
     pub id: i64,
     pub list_id: Option<i64>,
@@ -202,6 +205,7 @@ pub struct TaskDto {
 }
 
 #[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ListDto {
     pub id: i64,
     pub name: String,
@@ -215,6 +219,7 @@ pub struct ListDto {
 }
 
 #[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct StatsDto {
     pub open: i64,
     pub done: i64,
@@ -229,6 +234,7 @@ pub struct StatsDto {
 }
 
 #[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct DayCount {
     pub day: String,
     pub done: i64,
@@ -236,6 +242,7 @@ pub struct DayCount {
 }
 
 #[derive(Serialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct PerList {
     pub name: String,
     pub color: String,

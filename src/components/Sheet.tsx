@@ -20,8 +20,8 @@ export function Sheet({
   return (
     <div className="pointer-events-none fixed inset-0 z-[55]" aria-hidden={!open}>
       <div
-        className={`pointer-events-auto absolute inset-0 bg-black/30 backdrop-blur-[2px] transition-opacity duration-200 ${
-          open ? "opacity-100" : "opacity-0"
+        className={`absolute inset-0 bg-black/30 backdrop-blur-[2px] transition-opacity duration-200 ${
+          open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
         onClick={onClose}
       />

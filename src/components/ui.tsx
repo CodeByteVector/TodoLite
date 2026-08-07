@@ -1,6 +1,5 @@
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
-import { motion } from "motion/react";
-import { Check } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 
 /** iOS-style switch */
 export function Switch({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
@@ -47,7 +46,7 @@ export function IconButton({
   );
 }
 
-/** Circle checkbox used on task rows */
+/** Circle checkbox used on task rows — animated draw-in check + pop */
 export function CheckCircle({
   checked,
   color,
@@ -63,7 +62,7 @@ export function CheckCircle({
   return (
     <motion.button
       whileHover={{ scale: 1.12 }}
-      whileTap={{ scale: 0.85 }}
+      whileTap={{ scale: 0.8 }}
       onClick={(e) => {
         e.stopPropagation();
         onToggle();
@@ -73,19 +72,47 @@ export function CheckCircle({
       style={{
         borderColor: checked ? "transparent" : stroke,
         background: checked ? stroke : "transparent",
-        color: "#fff",
       }}
     >
-      {checked && (
-        <motion.span
-          initial={{ scale: 0, rotate: -40 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: "spring", stiffness: 500, damping: 22 }}
-          className="flex items-center justify-center"
-        >
-          <Check size={14} strokeWidth={3.5} />
-        </motion.span>
-      )}
+      <AnimatePresence>
+        {checked && (
+          <motion.span
+            key="ping"
+            className="pointer-events-none absolute -inset-1 rounded-full"
+            style={{ border: `2px solid ${stroke}` }}
+            initial={{ scale: 0.4, opacity: 0.7 }}
+            animate={{ scale: 1.7, opacity: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.55, ease: "easeOut" }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {checked && (
+          <motion.svg
+            key="check"
+            viewBox="0 0 24 24"
+            className="h-[14px] w-[14px]"
+            fill="none"
+            initial={{ scale: 0.4, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.2, opacity: 0, transition: { duration: 0.12 } }}
+            transition={{ type: "spring", stiffness: 520, damping: 26 }}
+          >
+            <motion.path
+              d="M5 12.6l4.2 4.4L19 7.4"
+              stroke="#fff"
+              strokeWidth={3.4}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ pathLength: { duration: 0.26, ease: "easeOut" }, delay: 0.03 }}
+            />
+          </motion.svg>
+        )}
+      </AnimatePresence>
     </motion.button>
   );
 }
