@@ -11,7 +11,7 @@ jobs:
     env:
       OPENSSL_DIR: C:\vcpkg\installed\x64-windows-static
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install OpenSSL (static) via vcpkg
         shell: pwsh
