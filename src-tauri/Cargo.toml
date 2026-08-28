@@ -28,7 +28,7 @@ tauri-plugin-autostart = "2.5.1"
 tokio = { version = "1.53.1", features = ["time", "rt-multi-thread", "macros"] }
 windows-sys = { version = "0.61.2", features = ["Win32_Security_Cryptography", "Win32_Foundation", "Win32_System_Memory", "Win32_Security"] }
 chrono = { version = "0.4.45", features = ["clock"] }
-aes-gcm = "0.10.3"
+aes-gcm = "0.11.1"
 scrypt = "0.11.0"
 rand = "0.8.5"
 zeroize = "1.8.1"
