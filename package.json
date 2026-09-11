@@ -16,7 +16,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.30.0",
-    "motion": "^13.0.0",
+    "motion": "^13.2.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tailwindcss": "^4.3.3",
